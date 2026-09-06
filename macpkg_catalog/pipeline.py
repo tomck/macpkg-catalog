@@ -6,7 +6,12 @@ from .core import validate, write_sqlite, key
 
 def generate(snapshot, output):
     data = json.loads(Path(snapshot).read_text())
-    packages, relations = data["packages"], data["relations"]
+    packages = data["packages"]
+    from .mapping import match
+    relations = data.get("relations")
+    if relations is None:
+        relations = match(packages,data.get("sources",{}))
+        data["relations"] = relations
     errors = validate(packages, relations)
     if errors:
         raise ValueError("\n".join(errors))
