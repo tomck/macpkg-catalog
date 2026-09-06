@@ -1,0 +1,15 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+[project]
+name = "macpkg-catalog"
+version = "0.1.0"
+requires-python = ">=3.9"
+[project.scripts]
+macpkg-catalog = "macpkg_catalog.cli:main"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.setuptools.packages.find]
+include = ["macpkg_catalog*"]

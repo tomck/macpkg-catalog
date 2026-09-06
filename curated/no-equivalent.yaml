@@ -1,0 +1,5 @@
+# Incidental shared text is not evidence.
+no_equivalent:
+  - source: {manager: macports, package_type: port, native_name: macs-fan-control}
+    target: {manager: fink, package_type: package, native_name: qmail-spamcontrol}
+    reason: "Unrelated upstream identities."

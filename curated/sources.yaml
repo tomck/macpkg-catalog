@@ -1,0 +1,5 @@
+sources:
+  homebrew_formula: https://formulae.brew.sh/api/formula.json
+  homebrew_cask: https://formulae.brew.sh/api/cask.json
+  macports: https://ports.macports.org/
+  fink: https://pdb.finkproject.org/
