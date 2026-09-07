@@ -1,8 +1,8 @@
 class Brew2fink < Formula
   desc "Safe Homebrew to Fink migration planner"
   homepage "https://github.com/tomck/homebrew-brew2fink"
-  url "https://github.com/tomck/homebrew-brew2fink/archive/refs/tags/v0.1.0.tar.gz"
-  sha256 "916282cac6fc432b5045d01597d67afefbc7ea561a97c5ce6d70e2a5d9067447"
+  url "https://github.com/tomck/homebrew-brew2fink/archive/refs/tags/v0.1.1.tar.gz"
+  sha256 "f045e828bf3cd4d7a26c6ec7c1ff2ae2656daa014b0c80bc8f5011af2d709aaa"
   license "MIT"
   depends_on "python@3.14"
 
