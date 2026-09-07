@@ -1,5 +1,7 @@
 import json, urllib.request
 import hashlib
+import time
+import os
 from dataclasses import asdict
 from datetime import datetime, timezone
 from .core import Package
@@ -21,6 +23,85 @@ def fetch_analytics(category, period="365d", package_type="formula"):
         for name, values in (data.get("formulae") or {}).items():
             rows.extend((item.get("formula") or item.get("cask") or name,item) for item in values)
     return {name:{"count":int(str(item.get("count",0)).replace(",","")),"rank":item.get("number"),"percent":float(str(item["percent"]).replace("%","")) if item.get("percent") is not None else None} for name,item in rows if name}
+
+def fetch_macports(page_size=50, progress=None):
+    """Fetch every active MacPorts API record with count validation."""
+    url="https://ports.macports.org/api/v1/ports/?page=1"
+    rows=[]; expected=None
+    while url:
+        data=_get(url)
+        if expected is None: expected=data.get("count")
+        rows.extend(data.get("results",[]))
+        if progress: progress(len(rows),expected)
+        url=data.get("next")
+        time.sleep(0.01)
+    if expected is None or len(rows) < expected:
+        raise RuntimeError(f"MacPorts fetch incomplete: received {len(rows)}, expected {expected}")
+    return normalize_macports(rows,"macports-api",datetime.now(timezone.utc).isoformat())
+
+def parse_portindex(text, source_url, revision, seen):
+    """Parse MacPorts' local pre-generated PortIndex without contacting its API."""
+    records=[]
+    for line in text.splitlines():
+        line=line.strip()
+        if not line or line.startswith("#"): continue
+        fields={}; pos=0; parts=line.split(None,2)
+        if len(parts)<3: continue
+        fields["name"]=parts[0]
+        pos=len(parts[0])+len(parts[1])+2
+        body=line[pos:]
+        i=0
+        while i<len(body):
+            while i<len(body) and body[i].isspace(): i+=1
+            start=i
+            while i<len(body) and not body[i].isspace(): i+=1
+            field=body[start:i]
+            while i<len(body) and body[i].isspace(): i+=1
+            if i>=len(body): break
+            if body[i]=='{':
+                depth=1; i+=1; start=i
+                while i<len(body) and depth:
+                    if body[i]=='{': depth+=1
+                    elif body[i]=='}': depth-=1
+                    i+=1
+                value=body[start:i-1]
+            else:
+                start=i
+                while i<len(body) and not body[i].isspace(): i+=1
+                value=body[start:i]
+            fields[field]=value
+        if fields.get("name"):
+            records.append(asdict(Package("macports","port",fields["name"],description=fields.get("description","") or fields.get("long_description","") ,homepage=fields.get("homepage",""),version=fields.get("version",""),revision=fields.get("revision",""),renamed_by=[fields["replaced_by"]] if fields.get("replaced_by") else [],source_url=source_url,source_revision=revision,last_seen=seen)))
+    return records
+
+def fetch_macports_local():
+    candidates=("/opt/local/var/macports/sources/rsync.macports.org/macports/release/tarballs/ports/PortIndex","/opt/local/var/macports/sources/rsync.macports.org/macports/release/tarballs/remote/PortIndex")
+    for filename in candidates:
+        if os.path.isfile(filename):
+            stat=os.stat(filename)
+            with open(filename,encoding="utf-8",errors="replace") as stream: text=stream.read()
+            return parse_portindex(text,filename,str(stat.st_mtime_ns),datetime.now(timezone.utc).isoformat())
+    return None
+
+def fetch_live_snapshot():
+    """Build a normalized Homebrew + MacPorts snapshot and analytics records."""
+    seen=datetime.now(timezone.utc).isoformat()
+    packages=[]
+    for kind in ("formula","cask"):
+        rows=_get(SOURCES[kind])
+        packages.extend(normalize_homebrew(rows,kind,"homebrew-api",seen))
+    local_ports=fetch_macports_local()
+    if local_ports is None:
+        local_ports=fetch_macports()
+    packages.extend(local_ports)
+    popularity=[]
+    for kind in ("formula","cask"):
+        for period in ("30d","90d","365d"):
+            installs=fetch_analytics("install" if kind=="formula" else "cask-install",period,kind)
+            requested=fetch_analytics("install-on-request",period,kind) if kind=="formula" else {}
+            for name,value in installs.items():
+                popularity.append({"manager":"homebrew","package_type":kind,"native_name":name,"period":period,"install_count":value["count"],"install_on_request_count":requested.get(name,{}).get("count",0),"rank":value["rank"],"percent":value["percent"],"source_url":ANALYTICS,"intel_status":"unknown","last_seen":seen})
+    return {"schema_version":1,"catalog_version":"source-snapshot","generated_at":seen,"sources":{"homebrew":"homebrew-api","macports":"macports-api"},"packages":packages,"relations":[],"popularity":popularity}
 def fetch(kind):
     with urllib.request.urlopen(SOURCES[kind],timeout=60) as r: data=json.load(r)
     out=[]

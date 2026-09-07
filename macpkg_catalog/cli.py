@@ -2,7 +2,7 @@ import argparse,json,sqlite3
 from pathlib import Path
 from .core import write_sqlite, key
 from .pipeline import generate, load_snapshot
-from .sources import fetch, fetch_analytics
+from .sources import fetch, fetch_analytics, fetch_live_snapshot
 def main():
     p=argparse.ArgumentParser(); s=p.add_subparsers(dest="cmd",required=True)
     for n in ("lookup","relations"):
@@ -11,7 +11,12 @@ def main():
     x=s.add_parser("popularity"); x.add_argument("manager"); x.add_argument("type"); x.add_argument("name"); x.add_argument("--snapshot",default="dist/catalog.json")
     x=s.add_parser("export"); x.add_argument("--output",required=True); x.add_argument("--format",choices=["sqlite"],required=True); x.add_argument("--snapshot",default="dist/catalog.json")
     x=s.add_parser("generate"); x.add_argument("--output",default="dist"); x.add_argument("--refresh",action="store_true"); x.add_argument("--input")
+    x=s.add_parser("fetch-live"); x.add_argument("--output",default="snapshots/catalog.json")
     a=p.parse_args()
+    if a.cmd=="fetch-live":
+        output=Path(a.output); output.parent.mkdir(parents=True,exist_ok=True)
+        output.write_text(json.dumps(fetch_live_snapshot(),indent=2)+"\n")
+        print(f"Wrote {output}"); return
     if a.cmd=="generate":
         if a.refresh: p.error("Full-source refresh is not implemented yet; use --input")
         if not a.input: p.error("Offline generation requires --input")
