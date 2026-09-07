@@ -10,6 +10,8 @@ Neutral, reproducible package identity and relationship catalog for Homebrew, Ma
 
 See `docs/` and `curated/` for policy, schema, sources, and usage. Homebrew’s public analytics provide 30-, 90-, and 365-day install and install-on-request reports; Intel-specific package demand is recorded only when explicitly available, otherwise it remains unknown.
 
-The earlier Homebrew-to-MacPorts application has been migrated under
-`integrations/brew2port/`. It remains a separate consumer project; the catalog
-is the reusable source of package identities and reviewed relationships.
+The migration applications are maintained separately in
+[brew2port](https://github.com/tomck/brew2port),
+[brew2fink](https://github.com/tomck/brew2fink), and
+[macpkg-migrate](https://github.com/tomck/macpkg-migrate). They consume the
+published catalog contract; this repository contains no application copies.
