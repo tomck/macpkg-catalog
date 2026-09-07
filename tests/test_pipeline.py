@@ -28,6 +28,30 @@ def test_load_bare_relations_array(tmp_path):
     path.write_text(json.dumps(source["relations"]))
     assert load_snapshot(path,"relations")["relations"]==source["relations"]
 
+def test_generate_applies_curated_relation(tmp_path):
+    source_dir=tmp_path/"snapshots"
+    curated_dir=tmp_path/"curated"
+    source_dir.mkdir()
+    curated_dir.mkdir()
+    source=source_dir/"input.json"
+    source.write_text(json.dumps(fixture()))
+    (curated_dir/"relations.yaml").write_text("""relations:
+  - source: {manager: homebrew, package_type: formula, native_name: wget}
+    target: {manager: macports, package_type: port, native_name: wget}
+    type: equivalent
+    confidence: 1.0
+    evidence: [{kind: upstream, value: https://example.invalid/wget}]
+    review_status: automatic
+""")
+    for name in ("aliases.yaml", "sources.yaml"):
+        (curated_dir/name).write_text("{}\n")
+    (curated_dir/"no-equivalent.yaml").write_text("no_equivalent: []\n")
+
+    generated=generate(source,tmp_path/"output")
+
+    assert generated["relations"][0]["matching_method"] == "curated"
+    assert generated["relations"][0]["source_catalog_versions"] == {"fixture":"1"}
+
 def test_high_confidence_spelling_is_rejected():
     data=fixture()
     data["relations"][0]["matching_method"]="fuzzy"

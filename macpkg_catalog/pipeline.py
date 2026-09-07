@@ -9,10 +9,15 @@ def generate(snapshot, output):
     packages = data["packages"]
     data.setdefault("popularity", [])
     data.setdefault("analytics_policy", "install-on-request is the primary demand signal; Intel package-level data is unknown unless explicitly reported")
+    from .curated import apply_aliases, load_curated
+    curated_dir=Path(snapshot).resolve().parent.parent / "curated"
+    curated, aliases, curated_sources=load_curated(curated_dir)
+    apply_aliases(packages, aliases)
+    data.setdefault("curated_sources", curated_sources)
     from .mapping import match
     relations = data.get("relations")
     if not relations:
-        relations = match(packages,data.get("sources",{}))
+        relations = match(packages,data.get("sources",{}),curated)
         data["relations"] = relations
     errors = validate(packages, relations)
     if errors:

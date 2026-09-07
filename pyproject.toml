@@ -5,6 +5,7 @@ build-backend = "setuptools.build_meta"
 name = "macpkgmap"
 version = "0.1.0"
 requires-python = ">=3.9"
+dependencies = ["PyYAML>=6"]
 [project.scripts]
 macpkgmap = "macpkg_catalog.cli:main"
 

@@ -10,8 +10,8 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with: {python-version: '3.x'}
-      - name: Install test runner
-        run: python -m pip install --disable-pip-version-check pytest
+      - name: Install catalog and test runner
+        run: python -m pip install --disable-pip-version-check -e . pytest
       - name: Fetch source snapshots
         run: PYTHONPATH=. python -m macpkg_catalog fetch-live --output snapshots/catalog.json
       - name: Build catalog
