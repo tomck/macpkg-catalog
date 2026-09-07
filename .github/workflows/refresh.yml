@@ -10,6 +10,15 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with: {python-version: '3.x'}
-      - run: python -m pytest
-      # Live source acquisition and Pages publication are enabled after the
-      # fetch/build job is added; never publish an unverified partial catalog.
+      - name: Install test runner
+        run: python -m pip install --disable-pip-version-check pytest
+      - name: Fetch source snapshots
+        run: PYTHONPATH=. python -m macpkg_catalog fetch-live --output snapshots/catalog.json
+      - name: Build catalog
+        run: PYTHONPATH=. python -m macpkg_catalog generate --input snapshots/catalog.json --output build/catalog
+      - name: Validate tests
+        run: PYTHONPATH=. python -m pytest -q
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with: {path: build/catalog}
+      - uses: actions/deploy-pages@v4
