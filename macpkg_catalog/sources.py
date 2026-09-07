@@ -2,11 +2,13 @@ import json, urllib.request
 import hashlib
 import time
 import os
+import gzip, io, tarfile
 from dataclasses import asdict
 from datetime import datetime, timezone
 from .core import Package
 SOURCES={'formula':'https://formulae.brew.sh/api/formula.json','cask':'https://formulae.brew.sh/api/cask.json'}
 ANALYTICS='https://formulae.brew.sh/api/analytics/{category}/{scope}/{period}.json'
+FINK_SNAPSHOT='https://github.com/fink/fink-distributions/archive/refs/heads/master.tar.gz'
 
 def _get(url):
     request=urllib.request.Request(url,headers={"User-Agent":"macpkgmap/0.1"})
@@ -94,6 +96,7 @@ def fetch_live_snapshot():
     if local_ports is None:
         local_ports=fetch_macports()
     packages.extend(local_ports)
+    packages.extend(fetch_fink_snapshot())
     popularity=[]
     for kind in ("formula","cask"):
         for period in ("30d","90d","365d"):
@@ -101,7 +104,7 @@ def fetch_live_snapshot():
             requested=fetch_analytics("install-on-request",period,kind) if kind=="formula" else {}
             for name,value in installs.items():
                 popularity.append({"manager":"homebrew","package_type":kind,"native_name":name,"period":period,"install_count":value["count"],"install_on_request_count":requested.get(name,{}).get("count",0),"rank":value["rank"],"percent":value["percent"],"source_url":ANALYTICS,"intel_status":"unknown","last_seen":seen})
-    return {"schema_version":1,"catalog_version":"source-snapshot","generated_at":seen,"sources":{"homebrew":"homebrew-api","macports":"macports-api"},"packages":packages,"relations":[],"popularity":popularity}
+    return {"schema_version":1,"catalog_version":"source-snapshot","generated_at":seen,"sources":{"homebrew":"homebrew-api","macports":"macports-portindex","fink":FINK_SNAPSHOT},"packages":packages,"relations":[],"popularity":popularity}
 def fetch(kind):
     with urllib.request.urlopen(SOURCES[kind],timeout=60) as r: data=json.load(r)
     out=[]
@@ -162,4 +165,41 @@ def parse_fink_index(text, source_url, revision, seen):
             revision=revision_number if sep else "",provides=names("Provides"),
             conflicts=names("Conflicts"),replaces=names("Replaces"),
             source_url=source_url,source_revision=revision,last_seen=seen)))
+    return records
+
+def parse_fink_info(text, source_url, revision, seen):
+    """Parse one Fink .info description, including relationship metadata."""
+    fields={}; current=None
+    for line in text.splitlines():
+        if line.startswith((" ","\t")) and current:
+            fields[current]+="\n"+line.strip()
+        elif ":" in line:
+            current,value=line.split(":",1); fields[current]=value.strip()
+    if not fields.get("Package"): return None
+    def names(field):
+        import re
+        return [part.strip().split()[0] for part in re.split(r"[,|]",fields.get(field,"")) if part.strip()]
+    return asdict(Package("fink","package",fields["Package"],description=fields.get("Description","") or fields.get("DescDetail",""),homepage=fields.get("Homepage",""),upstream=fields.get("Source","").split()[0] if fields.get("Source") else "",version=fields.get("Version",""),revision=fields.get("Revision",""),provides=names("Provides"),conflicts=names("Conflicts"),replaces=names("Replaces"),source_url=source_url,source_revision=revision,last_seen=seen))
+
+def fetch_fink_local():
+    candidates=("/opt/sw/fink/dists/stable/main/binary-darwin-i386/Packages.gz","/opt/sw/fink/dists/stable/main/binary-darwin-arm64/Packages.gz","/opt/sw/fink/dists/stable/main/binary-darwin-i386/Packages","/opt/sw/fink/dists/stable/main/binary-darwin-arm64/Packages")
+    for filename in candidates:
+        if os.path.isfile(filename):
+            raw=open(filename,"rb").read()
+            text=gzip.decompress(raw).decode("utf-8","replace") if filename.endswith(".gz") else raw.decode("utf-8","replace")
+            return parse_fink_index(text,filename,str(os.stat(filename).st_mtime_ns),datetime.now(timezone.utc).isoformat())
+    return None
+
+def fetch_fink_snapshot():
+    local=fetch_fink_local()
+    if local is not None: return local
+    request=urllib.request.Request(FINK_SNAPSHOT,headers={"User-Agent":"macpkgmap/0.1"})
+    with urllib.request.urlopen(request,timeout=180) as response: payload=response.read()
+    revision=hashlib.sha256(payload).hexdigest(); records=[]; seen=datetime.now(timezone.utc).isoformat()
+    with tarfile.open(fileobj=io.BytesIO(payload),mode="r:gz") as archive:
+        for member in archive.getmembers():
+            if member.isfile() and member.name.endswith(".info"):
+                record=parse_fink_info(archive.extractfile(member).read().decode("utf-8","replace"),FINK_SNAPSHOT,revision,seen)
+                if record is not None: records.append(record)
+    if not records: raise RuntimeError("Fink snapshot contained no parseable package descriptions")
     return records
