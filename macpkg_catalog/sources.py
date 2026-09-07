@@ -9,6 +9,7 @@ from .core import Package, NAME
 SOURCES={'formula':'https://formulae.brew.sh/api/formula.json','cask':'https://formulae.brew.sh/api/cask.json'}
 ANALYTICS='https://formulae.brew.sh/api/analytics/{category}/{scope}/{period}.json'
 FINK_SNAPSHOT='https://github.com/fink/fink-distributions/archive/refs/heads/master.tar.gz'
+MACPORTS_PORTINDEX='https://ftp.fau.de/macports/release/tarballs/PortIndex_darwin_25_i386/PortIndex'
 
 def _get(url):
     request=urllib.request.Request(url,headers={"User-Agent":"macpkgmap/0.1"})
@@ -91,6 +92,11 @@ def fetch_macports_local():
             return parse_portindex(text,filename,str(stat.st_mtime_ns),datetime.now(timezone.utc).isoformat())
     return None
 
+def fetch_macports_portindex():
+    request=urllib.request.Request(MACPORTS_PORTINDEX,headers={"User-Agent":"macpkgmap/0.1"})
+    with urllib.request.urlopen(request,timeout=180) as response: payload=response.read()
+    return parse_portindex(payload.decode("utf-8","replace"),MACPORTS_PORTINDEX,hashlib.sha256(payload).hexdigest(),datetime.now(timezone.utc).isoformat())
+
 def fetch_live_snapshot():
     """Build a normalized Homebrew + MacPorts snapshot and analytics records."""
     seen=datetime.now(timezone.utc).isoformat()
@@ -100,7 +106,7 @@ def fetch_live_snapshot():
         packages.extend(normalize_homebrew(rows,kind,"homebrew-api",seen))
     local_ports=fetch_macports_local()
     if local_ports is None:
-        local_ports=fetch_macports()
+        local_ports=fetch_macports_portindex()
     packages.extend(local_ports)
     packages.extend(fetch_fink_snapshot())
     # Fink's source tree contains multiple release/architecture descriptions;
