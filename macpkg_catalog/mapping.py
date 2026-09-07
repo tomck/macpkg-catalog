@@ -1,5 +1,6 @@
 """Conservative indexed matching; string matches remain review suggestions."""
 from collections import defaultdict
+import re
 from urllib.parse import urlsplit
 from .core import key, normalize_name
 
@@ -15,6 +16,19 @@ def upstream_identity(url):
     if host in {"github.com","gitlab.com","bitbucket.org"} and len(path.strip("/").split("/"))!=2:
         return None
     return host+path
+
+def near_hit(source, target, evidence, source_version="", target_version=""):
+    """Return a review-only version-family relationship, or None."""
+    def family(name):
+        value=normalize_name(name)
+        value=re.sub(r"(^|-)py\d+(?=-|$)", r"\1", value)
+        return re.sub(r"(?:@|-)?\d+(?:\.\d+)*$", "", value).strip("-")
+    if not family(source["native_name"]) or family(source["native_name"]) != family(target["native_name"]):
+        return None
+    return {"source":identity(source),"target":identity(target),"type":"equivalent","confidence":0.78,
+            "matching_method":"version-family","evidence":evidence,"review_status":"needs-review",
+            "version_relation":"nearest-compatible-version","source_version":source_version,
+            "target_version":target_version,"source_catalog_versions":{}}
 
 def match(packages, versions, curated=()):
     result=[]
@@ -61,4 +75,28 @@ def match(packages, versions, curated=()):
             if len(group)==1:
                 group[0]["review_status"]="automatic"
         result.extend(candidates.values())
+    # Version-family matches are deliberately generated only when the name
+    # carries version evidence. They remain review-only and are never used to
+    # promote an otherwise unrelated fuzzy spelling match.
+    families=defaultdict(list)
+    for package in packages:
+        family=normalize_name(package["native_name"])
+        family=re.sub(r"(^|-)py\d+(?=-|$)", r"\1", family)
+        family=re.sub(r"(?:@|-)?\d+(?:\.\d+)*$", "", family).strip("-")
+        if family and re.search(r"(?:@|-|py)\d", normalize_name(package["native_name"])):
+            families[(package["manager"],family)].append(package)
+    seen={(key(r["source"]),key(r["target"])) for r in result}
+    for package in packages:
+        family=normalize_name(package["native_name"])
+        family=re.sub(r"(^|-)py\d+(?=-|$)", r"\1", family)
+        family=re.sub(r"(?:@|-)?\d+(?:\.\d+)*$", "", family).strip("-")
+        if not family: continue
+        for (manager,target_family), targets in families.items():
+            if manager==package["manager"] or target_family!=family: continue
+            for target in targets:
+                relation=near_hit(identity(package),identity(target),[{"kind":"version-family","value":family}],package.get("version",""),target.get("version",""))
+                pair=(key(relation["source"]),key(relation["target"])) if relation else None
+                if relation and pair not in seen:
+                    relation["source_catalog_versions"]=versions
+                    result.append(relation); seen.add(pair)
     return sorted(result,key=lambda r:(key(r["source"]),key(r["target"])))

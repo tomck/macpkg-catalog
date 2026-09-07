@@ -7,6 +7,8 @@ from .core import validate, write_sqlite, key
 def generate(snapshot, output):
     data = json.loads(Path(snapshot).read_text())
     packages = data["packages"]
+    data.setdefault("popularity", [])
+    data.setdefault("analytics_policy", "install-on-request is the primary demand signal; Intel package-level data is unknown unless explicitly reported")
     from .mapping import match
     relations = data.get("relations")
     if relations is None:
@@ -29,6 +31,7 @@ def generate(snapshot, output):
     put("catalog.json", data)
     put("packages.json", packages)
     put("relations.json", relations)
+    put("popularity.json", data["popularity"])
     write_sqlite(packages, relations, root / "catalog.sqlite")
     import sqlite3
     with sqlite3.connect(root / "catalog.sqlite") as connection:
@@ -44,7 +47,8 @@ def generate(snapshot, output):
         put("v1/lookup/" + suffix, envelope)
         put("v1/relations/" + suffix, {"catalog_version":data["catalog_version"],"relations":grouped.get(key(package),[])})
     automatic = sum(r.get("review_status") == "automatic" for r in relations)
-    (root / "mapping-report.md").write_text(f"# Mapping report\n\nVersion: {data['catalog_version']}\n\nPackages: {len(packages)}\n\nRelationships: {len(relations)}\n\nAutomatic: {automatic}\n\nFull evidence is available in relations.json.\n")
+    near = sum(r.get("review_status") == "needs-review" and r.get("matching_method") == "version-family" for r in relations)
+    (root / "mapping-report.md").write_text(f"# Mapping report\n\nVersion: {data['catalog_version']}\n\nPackages: {len(packages)}\n\nRelationships: {len(relations)}\n\nAutomatic: {automatic}\n\nNear-hits: {near}\n\nPopularity is contextual evidence only; it never establishes equivalence.\n")
     (root / "checksums.txt").write_text("\n".join(hashlib.sha256(p.read_bytes()).hexdigest()+"  "+p.relative_to(root).as_posix() for p in sorted(root.rglob("*")) if p.is_file())+"\n")
     return data
 

@@ -4,6 +4,23 @@ from dataclasses import asdict
 from datetime import datetime, timezone
 from .core import Package
 SOURCES={'formula':'https://formulae.brew.sh/api/formula.json','cask':'https://formulae.brew.sh/api/cask.json'}
+ANALYTICS='https://formulae.brew.sh/api/analytics/{category}/{scope}/{period}.json'
+
+def _get(url):
+    request=urllib.request.Request(url,headers={"User-Agent":"macpkgmap/0.1"})
+    with urllib.request.urlopen(request,timeout=60) as r: return json.load(r)
+
+def fetch_analytics(category, period="365d", package_type="formula"):
+    scope="homebrew-core" if package_type=="formula" else "homebrew-cask"
+    data=_get(ANALYTICS.format(category=category,scope=scope,period=period))
+    rows=[]
+    items=data.get("items") or []
+    if items:
+        rows=[(x.get("formula") or x.get("cask"),x) for x in items]
+    else:
+        for name, values in (data.get("formulae") or {}).items():
+            rows.extend((item.get("formula") or item.get("cask") or name,item) for item in values)
+    return {name:{"count":int(str(item.get("count",0)).replace(",","")),"rank":item.get("number"),"percent":float(str(item["percent"]).replace("%","")) if item.get("percent") is not None else None} for name,item in rows if name}
 def fetch(kind):
     with urllib.request.urlopen(SOURCES[kind],timeout=60) as r: data=json.load(r)
     out=[]
