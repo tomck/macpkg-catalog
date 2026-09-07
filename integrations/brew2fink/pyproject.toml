@@ -1,0 +1,9 @@
+[project]
+name = "brew2fink"
+version = "0.1.0"
+requires-python = ">=3.9"
+[project.scripts]
+brew2fink = "brew2fink.cli:main"
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
