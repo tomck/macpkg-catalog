@@ -49,13 +49,28 @@ def generate(snapshot, output):
     automatic = sum(r.get("review_status") == "automatic" for r in relations)
     near = sum(r.get("review_status") == "needs-review" and r.get("matching_method") == "version-family" for r in relations)
     (root / "mapping-report.md").write_text(f"# Mapping report\n\nVersion: {data['catalog_version']}\n\nPackages: {len(packages)}\n\nRelationships: {len(relations)}\n\nAutomatic: {automatic}\n\nNear-hits: {near}\n\nPopularity is contextual evidence only; it never establishes equivalence.\n")
+    (root / "index.html").write_text(
+        "<!doctype html>\n<meta charset=\"utf-8\">\n"
+        "<title>macpkg-catalog</title>\n<h1>macpkg-catalog</h1>\n"
+        "<p>Neutral package identities and cross-manager relationships.</p>\n"
+        "<ul><li><a href=\"catalog.json\">catalog.json</a></li>\n"
+        "<li><a href=\"packages.json\">packages.json</a></li>\n"
+        "<li><a href=\"relations.json\">relations.json</a></li>\n"
+        "<li><a href=\"popularity.json\">popularity.json</a></li>\n"
+        "<li><a href=\"mapping-report.md\">mapping report</a></li></ul>\n"
+    )
     (root / "checksums.txt").write_text("\n".join(hashlib.sha256(p.read_bytes()).hexdigest()+"  "+p.relative_to(root).as_posix() for p in sorted(root.rglob("*")) if p.is_file() and p.name != "checksums.txt")+"\n")
     return data
 
-def load_snapshot(path):
+def load_snapshot(path, default_kind=None):
     path = Path(path).resolve()
     if path.suffix != ".sqlite":
-        return json.loads(path.read_text())
+        payload = json.loads(path.read_text())
+        if isinstance(payload, list):
+            if default_kind is None:
+                raise ValueError("A bare JSON array requires a snapshot kind")
+            return {default_kind: payload}
+        return payload
     import sqlite3
     with sqlite3.connect(path.as_uri()+"?mode=ro", uri=True) as connection:
         data = {k:json.loads(v) for k,v in connection.execute("SELECT key,value FROM metadata")}

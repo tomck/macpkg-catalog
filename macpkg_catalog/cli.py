@@ -21,7 +21,8 @@ def main():
         if a.refresh: p.error("Full-source refresh is not implemented yet; use --input")
         if not a.input: p.error("Offline generation requires --input")
         generate(a.input,a.output); return
-    data=load_snapshot(a.snapshot)
+    snapshot_kind={"lookup":"packages","relations":"relations","search":"packages","popularity":"popularity"}.get(a.cmd)
+    data=load_snapshot(a.snapshot,snapshot_kind)
     if a.cmd=="export":
         write_sqlite(data["packages"],data["relations"],a.output)
         with sqlite3.connect(a.output) as c:

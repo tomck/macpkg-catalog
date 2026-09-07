@@ -20,6 +20,13 @@ def test_artifacts_roundtrip_and_checksums(tmp_path):
     for line in (output/"checksums.txt").read_text().splitlines():
         digest,path=line.split("  ",1)
         assert hashlib.sha256((output/path).read_bytes()).hexdigest()==digest
+    assert "catalog.json" in (output/"index.html").read_text()
+
+def test_load_bare_relations_array(tmp_path):
+    source=fixture()
+    path=tmp_path/"relations.json"
+    path.write_text(json.dumps(source["relations"]))
+    assert load_snapshot(path,"relations")["relations"]==source["relations"]
 
 def test_high_confidence_spelling_is_rejected():
     data=fixture()
