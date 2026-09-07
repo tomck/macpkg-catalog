@@ -11,7 +11,7 @@ def generate(snapshot, output):
     data.setdefault("analytics_policy", "install-on-request is the primary demand signal; Intel package-level data is unknown unless explicitly reported")
     from .mapping import match
     relations = data.get("relations")
-    if relations is None:
+    if not relations:
         relations = match(packages,data.get("sources",{}))
         data["relations"] = relations
     errors = validate(packages, relations)
