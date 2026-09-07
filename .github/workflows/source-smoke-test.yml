@@ -1,0 +1,44 @@
+name: source-download-smoke-test
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "macpkg_catalog/**"
+      - "tests/**"
+      - ".github/workflows/source-smoke-test.yml"
+
+jobs:
+  source-downloads:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+      - name: Install test runner
+        run: python -m pip install --disable-pip-version-check pytest
+      - name: Check public source downloads
+        run: |
+          python - <<'PY'
+          import gzip, io, json, tarfile, urllib.request
+
+          urls = {
+              "homebrew-formulae": "https://formulae.brew.sh/api/formula.json",
+              "homebrew-casks": "https://formulae.brew.sh/api/cask.json",
+              "homebrew-analytics": "https://formulae.brew.sh/api/analytics/install-on-request/homebrew-core/30d.json",
+              "macports-portindex": "https://raw.githubusercontent.com/macports/macports-ports/master/PortIndex",
+              "fink-distribution": "https://github.com/fink/fink-distributions/archive/refs/heads/master.tar.gz",
+          }
+          for name, url in urls.items():
+              request = urllib.request.Request(url, headers={"User-Agent": "macpkgmap-source-smoke-test"})
+              with urllib.request.urlopen(request, timeout=120) as response:
+                  payload = response.read()
+              if not payload:
+                  raise SystemExit(f"{name}: empty response")
+              if name.startswith("homebrew-") and name != "homebrew-analytics":
+                  json.loads(payload)
+              print(f"{name}: {len(payload)} bytes")
+          PY
+      - name: Run parser and regression tests
+        run: PYTHONPATH=. python -m pytest -q
