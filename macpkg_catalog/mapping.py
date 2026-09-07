@@ -91,9 +91,9 @@ def match(packages, versions, curated=()):
         family=re.sub(r"(^|-)py\d+(?=-|$)", r"\1", family)
         family=re.sub(r"(?:@|-)?\d+(?:\.\d+)*$", "", family).strip("-")
         if not family: continue
-        for (manager,target_family), targets in families.items():
-            if manager==package["manager"] or target_family!=family: continue
-            for target in targets:
+        for manager in ("homebrew", "macports", "fink"):
+            if manager == package["manager"]: continue
+            for target in families.get((manager, family), []):
                 relation=near_hit(identity(package),identity(target),[{"kind":"version-family","value":family}],package.get("version",""),target.get("version",""))
                 pair=(key(relation["source"]),key(relation["target"])) if relation else None
                 if relation and pair not in seen:

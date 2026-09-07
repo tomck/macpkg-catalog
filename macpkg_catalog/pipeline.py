@@ -49,7 +49,7 @@ def generate(snapshot, output):
     automatic = sum(r.get("review_status") == "automatic" for r in relations)
     near = sum(r.get("review_status") == "needs-review" and r.get("matching_method") == "version-family" for r in relations)
     (root / "mapping-report.md").write_text(f"# Mapping report\n\nVersion: {data['catalog_version']}\n\nPackages: {len(packages)}\n\nRelationships: {len(relations)}\n\nAutomatic: {automatic}\n\nNear-hits: {near}\n\nPopularity is contextual evidence only; it never establishes equivalence.\n")
-    (root / "checksums.txt").write_text("\n".join(hashlib.sha256(p.read_bytes()).hexdigest()+"  "+p.relative_to(root).as_posix() for p in sorted(root.rglob("*")) if p.is_file())+"\n")
+    (root / "checksums.txt").write_text("\n".join(hashlib.sha256(p.read_bytes()).hexdigest()+"  "+p.relative_to(root).as_posix() for p in sorted(root.rglob("*")) if p.is_file() and p.name != "checksums.txt")+"\n")
     return data
 
 def load_snapshot(path):
