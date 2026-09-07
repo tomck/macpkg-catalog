@@ -33,3 +33,14 @@ def test_match_emits_version_family_near_hit():
     relations=match(packages,{"fixture":"1"})
     assert relations[0]["matching_method"] == "version-family"
     assert relations[0]["review_status"] == "needs-review"
+
+def test_python_version_family_matches_different_manager_naming():
+    packages=[
+        {"manager":"homebrew","package_type":"formula","native_name":"python@3.14","version":"3.14.0"},
+        {"manager":"macports","package_type":"port","native_name":"python314","version":"3.14.1"},
+    ]
+    relations=match(packages,{"fixture":"1"})
+    relations=[r for r in relations if r["source"]["manager"]=="homebrew"]
+    assert len(relations)==1
+    assert relations[0]["matching_method"] == "version-family"
+    assert relations[0]["review_status"] == "needs-review"

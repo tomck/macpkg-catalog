@@ -17,13 +17,20 @@ def upstream_identity(url):
         return None
     return host+path
 
+def version_family(name):
+    """Return a conservative family key for explicitly versioned names."""
+    value=normalize_name(name)
+    if re.fullmatch(r"python-\d+(?:-\d+)?",value) or re.fullmatch(r"python\d{2,3}",value):
+        return "python"
+    if re.search(r"(?:@|-|py)\d", value):
+        family=re.sub(r"(^|-)py\d+(?=-|$)", r"\1", value)
+        family=re.sub(r"(?:@|-)?\d+(?:\.\d+)*$", "", family).strip("-")
+        return family or None
+    return None
+
 def near_hit(source, target, evidence, source_version="", target_version=""):
     """Return a review-only version-family relationship, or None."""
-    def family(name):
-        value=normalize_name(name)
-        value=re.sub(r"(^|-)py\d+(?=-|$)", r"\1", value)
-        return re.sub(r"(?:@|-)?\d+(?:\.\d+)*$", "", value).strip("-")
-    if not family(source["native_name"]) or family(source["native_name"]) != family(target["native_name"]):
+    if not version_family(source["native_name"]) or version_family(source["native_name"]) != version_family(target["native_name"]):
         return None
     return {"source":identity(source),"target":identity(target),"type":"equivalent","confidence":0.78,
             "matching_method":"version-family","evidence":evidence,"review_status":"needs-review",
@@ -80,16 +87,12 @@ def match(packages, versions, curated=()):
     # promote an otherwise unrelated fuzzy spelling match.
     families=defaultdict(list)
     for package in packages:
-        family=normalize_name(package["native_name"])
-        family=re.sub(r"(^|-)py\d+(?=-|$)", r"\1", family)
-        family=re.sub(r"(?:@|-)?\d+(?:\.\d+)*$", "", family).strip("-")
-        if family and re.search(r"(?:@|-|py)\d", normalize_name(package["native_name"])):
+        family=version_family(package["native_name"])
+        if family:
             families[(package["manager"],family)].append(package)
     seen={(key(r["source"]),key(r["target"])) for r in result}
     for package in packages:
-        family=normalize_name(package["native_name"])
-        family=re.sub(r"(^|-)py\d+(?=-|$)", r"\1", family)
-        family=re.sub(r"(?:@|-)?\d+(?:\.\d+)*$", "", family).strip("-")
+        family=version_family(package["native_name"])
         if not family: continue
         for manager in ("homebrew", "macports", "fink"):
             if manager == package["manager"]: continue
