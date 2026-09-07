@@ -1,11 +1,30 @@
 import json, re, sqlite3
 from dataclasses import dataclass, field
+from typing import Optional
 MANAGERS={"homebrew","macports","fink"}; NAME=re.compile(r"^[A-Za-z0-9][A-Za-z0-9+@._-]*$")
 @dataclass
 class Package:
     manager:str; package_type:str; native_name:str; aliases:list=field(default_factory=list); historical_names:list=field(default_factory=list); description:str=""; homepage:str=""; upstream:str=""; version:str=""; revision:str=""; provides:list=field(default_factory=list); conflicts:list=field(default_factory=list); replaces:list=field(default_factory=list); renamed_by:list=field(default_factory=list); source_url:str=""; source_revision:str=""; last_seen:str=""
     @property
     def identity(self): return {"manager":self.manager,"package_type":self.package_type,"native_name":self.native_name}
+
+@dataclass
+class Popularity:
+    manager: str; package_type: str; native_name: str; period: str
+    install_count: int = 0; install_on_request_count: int = 0
+    rank: Optional[int] = None; percent: Optional[float] = None
+    source_url: str = ""; source_revision: str = ""; last_seen: str = ""
+    intel_count: Optional[int] = None; intel_share: Optional[float] = None
+    intel_status: str = "unknown"
+
+@dataclass
+class Popularity:
+    manager: str; package_type: str; native_name: str; period: str
+    install_count: int = 0; install_on_request_count: int = 0
+    rank: int | None = None; percent: float | None = None
+    source_url: str = ""; source_revision: str = ""; last_seen: str = ""
+    intel_count: int | None = None; intel_share: float | None = None
+    intel_status: str = "unknown"
 def key(i): return (i["manager"],i["package_type"],i["native_name"])
 def normalize_name(s): return re.sub(r"[^a-z0-9]+","-",s.lower()).strip("-")
 def validate(packages,relations):

@@ -10,9 +10,6 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with: {python-version: '3.x'}
-      - run: python -m macpkg_catalog generate --refresh --output dist
       - run: python -m pytest
-      - run: sha256sum dist/* > dist/checksums.txt
-      - uses: actions/upload-pages-artifact@v3
-        with: {path: dist}
-      - uses: actions/deploy-pages@v4
+      # Live source acquisition and Pages publication are enabled after the
+      # fetch/build job is added; never publish an unverified partial catalog.
