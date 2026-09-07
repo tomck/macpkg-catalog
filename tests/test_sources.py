@@ -1,9 +1,15 @@
-from macpkg_catalog.sources import normalize_homebrew, normalize_macports, parse_fink_index, parse_portindex
+from macpkg_catalog.sources import normalize_homebrew, normalize_macports, parse_fink_index, parse_fink_info, parse_portindex
 
 def test_parse_local_portindex():
     rows=parse_portindex("wget 42 description {Internet file retriever} homepage https://example.test version 1.2 revision 0 portdir net/wget", "PortIndex", "r1", "now")
     assert rows[0]["native_name"] == "wget"
     assert rows[0]["description"] == "Internet file retriever"
+
+def test_parse_fink_info_relationships():
+    row=parse_fink_info("Package: demo\nVersion: 1.2\nProvides: virtual-demo, demo-api\nConflicts: old-demo\nReplaces: demo-old\n", "fink.info", "r1", "now")
+    assert row["provides"] == ["virtual-demo", "demo-api"]
+    assert row["conflicts"] == ["old-demo"]
+    assert row["replaces"] == ["demo-old"]
 
 def test_cask_identity_and_version():
     p=normalize_homebrew([{"token":"docker-desktop","name":["Docker Desktop"],"version":"4.0","old_tokens":["docker"]}],"cask","sha","date")[0]
