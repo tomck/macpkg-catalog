@@ -21,14 +21,15 @@ class Popularity:
 class Popularity:
     manager: str; package_type: str; native_name: str; period: str
     install_count: int = 0; install_on_request_count: int = 0
-    rank: int | None = None; percent: float | None = None
+    rank: Optional[int] = None; percent: Optional[float] = None
     source_url: str = ""; source_revision: str = ""; last_seen: str = ""
-    intel_count: int | None = None; intel_share: float | None = None
+    intel_count: Optional[int] = None; intel_share: Optional[float] = None
     intel_status: str = "unknown"
 def key(i): return (i["manager"],i["package_type"],i["native_name"])
 def normalize_name(s): return re.sub(r"[^a-z0-9]+","-",s.lower()).strip("-")
 def validate(packages,relations):
     errors=[]; ids=set(); pairs={}
+    records={key(p.identity if hasattr(p,"identity") else p):p for p in packages}
     for p in packages:
         i=p.identity if hasattr(p,"identity") else p; k=key(i)
         if k in ids: errors.append(f"duplicate package identity: {k}")
@@ -49,7 +50,6 @@ def validate(packages,relations):
         if "no-equivalent" in kinds and len(kinds)>1: errors.append("conflicting curated relationships")
         if r.get("review_status")=="automatic" and r.get("matching_method")=="upstream-identity":
             from .mapping import upstream_identity
-            records={key(p.identity if hasattr(p,"identity") else p):p for p in packages}
             source=records.get(key(r["source"])); target=records.get(key(r["target"]))
             if isinstance(source,Package): source=source.__dict__
             if isinstance(target,Package): target=target.__dict__
