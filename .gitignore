@@ -7,7 +7,9 @@ dist/
 build/
 snapshots/
 .cache/
-integrations/
+integrations/brew2port/.venv/
+integrations/brew2port/**/__pycache__/
+integrations/brew2port/*.egg-info/
 
 # Internal model-output notes; never publish or track these files.
 LUNARESPONSE.md

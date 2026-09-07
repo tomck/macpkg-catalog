@@ -1,0 +1,13 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+[project]
+name = "brew2port"
+version = "0.1.9"
+description = "Safe Homebrew to MacPorts migration planner"
+requires-python = ">=3.9"
+[project.scripts]
+brew2port = "brew2port.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["brew2port*"]
