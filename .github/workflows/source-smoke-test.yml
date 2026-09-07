@@ -27,7 +27,7 @@ jobs:
               "homebrew-formulae": "https://formulae.brew.sh/api/formula.json",
               "homebrew-casks": "https://formulae.brew.sh/api/cask.json",
               "homebrew-analytics": "https://formulae.brew.sh/api/analytics/install-on-request/homebrew-core/30d.json",
-              "macports-portindex": "https://raw.githubusercontent.com/macports/macports-ports/master/PortIndex",
+              "macports-portindex": "https://ftp.fau.de/macports/release/tarballs/PortIndex_darwin_25_i386/PortIndex",
               "fink-distribution": "https://github.com/fink/fink-distributions/archive/refs/heads/master.tar.gz",
           }
           for name, url in urls.items():
