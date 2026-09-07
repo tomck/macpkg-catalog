@@ -5,7 +5,7 @@ import os
 import gzip, io, tarfile
 from dataclasses import asdict
 from datetime import datetime, timezone
-from .core import Package
+from .core import Package, NAME
 SOURCES={'formula':'https://formulae.brew.sh/api/formula.json','cask':'https://formulae.brew.sh/api/cask.json'}
 ANALYTICS='https://formulae.brew.sh/api/analytics/{category}/{scope}/{period}.json'
 FINK_SNAPSHOT='https://github.com/fink/fink-distributions/archive/refs/heads/master.tar.gz'
@@ -44,9 +44,14 @@ def fetch_macports(page_size=50, progress=None):
 def parse_portindex(text, source_url, revision, seen):
     """Parse MacPorts' local pre-generated PortIndex without contacting its API."""
     records=[]
-    for line in text.splitlines():
+    lines=text.splitlines(); index=0
+    while index < len(lines):
+        line=lines[index]; index+=1
         line=line.strip()
         if not line or line.startswith("#"): continue
+        parts=line.split(None,2)
+        if len(parts)==2 and index < len(lines):
+            line += " " + lines[index].strip(); index+=1
         fields={}; pos=0; parts=line.split(None,2)
         if len(parts)<3: continue
         fields["name"]=parts[0]
@@ -71,7 +76,8 @@ def parse_portindex(text, source_url, revision, seen):
                 start=i
                 while i<len(body) and not body[i].isspace(): i+=1
                 value=body[start:i]
-            fields[field]=value
+            if field != "name":
+                fields[field]=value
         if fields.get("name"):
             records.append(asdict(Package("macports","port",fields["name"],description=fields.get("description","") or fields.get("long_description","") ,homepage=fields.get("homepage",""),version=fields.get("version",""),revision=fields.get("revision",""),renamed_by=[fields["replaced_by"]] if fields.get("replaced_by") else [],source_url=source_url,source_revision=revision,last_seen=seen)))
     return records
@@ -97,6 +103,16 @@ def fetch_live_snapshot():
         local_ports=fetch_macports()
     packages.extend(local_ports)
     packages.extend(fetch_fink_snapshot())
+    # Fink's source tree contains multiple release/architecture descriptions;
+    # keep one deterministic record per published identity and discard
+    # unresolved type-template names that are not installable package names.
+    unique={}
+    for package in packages:
+        name=package["native_name"]
+        if not NAME.match(name):
+            continue
+        unique[(package["manager"],package["package_type"],name)]=package
+    packages=list(unique.values())
     popularity=[]
     for kind in ("formula","cask"):
         for period in ("30d","90d","365d"):
@@ -175,7 +191,7 @@ def parse_fink_info(text, source_url, revision, seen):
             fields[current]+="\n"+line.strip()
         elif ":" in line:
             current,value=line.split(":",1); fields[current]=value.strip()
-    if not fields.get("Package"): return None
+    if not fields.get("Package") or not NAME.match(fields["Package"]): return None
     def names(field):
         import re
         return [part.strip().split()[0] for part in re.split(r"[,|]",fields.get(field,"")) if part.strip()]
