@@ -30,3 +30,20 @@ def install(rows,apply=False,run=subprocess.run):
         if not apply: result.append({**row,"status":"dry-run","command":command}); continue
         outcome=run(command); result.append({**row,"status":"installed" if outcome.returncode==0 else "failed","command":command})
     return result
+
+def update_fink(run=subprocess.run):
+    fink=shutil.which("fink")
+    if not fink: raise RuntimeError("Fink is not installed; install Fink before updating it")
+    result=run([fink,"selfupdate"])
+    if result.returncode: raise RuntimeError(f"Fink selfupdate failed with exit code {result.returncode}")
+    return {"status":"updated","command":[fink,"selfupdate"]}
+
+def verify(rows,run=subprocess.run):
+    result=[]
+    for row in rows:
+        choice=(row.get("candidates") or [{}])[0]; package=choice.get("package")
+        if not package:
+            result.append({"homebrew":row["homebrew"],"fink":None,"verified":False,"reason":"no mapping"}); continue
+        outcome=run(["fink","list",package],capture_output=True,text=True)
+        result.append({"homebrew":row["homebrew"],"fink":package,"verified":outcome.returncode==0 and package in outcome.stdout})
+    return result
