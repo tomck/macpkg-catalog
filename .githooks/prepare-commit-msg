@@ -2,6 +2,6 @@
 set -eu
 MSG_FILE="$1"
 case "$(cat "$MSG_FILE")" in
-  *"Co-authored-by: OpenAI"*) exit 0 ;;
+  *"Co-authored-by: Codex <noreply@openai.com>"*) exit 0 ;;
 esac
-printf '\nCo-authored-by: OpenAI <dev@openai.com>\n' >> "$MSG_FILE"
+printf '\nCo-authored-by: Codex <noreply@openai.com>\n' >> "$MSG_FILE"
