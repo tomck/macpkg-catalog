@@ -11,7 +11,7 @@ class Brew2fink < Formula
     (bin/"brew2fink").write <<~EOS
       #!/bin/sh
       export PYTHONPATH="#{libexec}${PYTHONPATH:+:$PYTHONPATH}"
-      exec "#{Formula[\"python@3.14\"].opt_bin}/python3.14" -m brew2fink "$@"
+      exec "#{Formula["python@3.14"].opt_bin}/python3.14" -m brew2fink "$@"
     EOS
     chmod 0755, bin/"brew2fink"
   end
