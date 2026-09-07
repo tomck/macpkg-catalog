@@ -1,9 +1,9 @@
 # homebrew-escapefrombrewyork
 
-The Homebrew tap for `macpkg-migrate`. The repository name is a joke; the
-installed package is simply named `macpkg-migrate`.
+Homebrew tap for migration and package-catalog tools. The programs are
+maintained in their own repositories; this repository contains only formulas.
 
 ```sh
 brew tap tomck/escapefrombrewyork
-brew install macpkg-migrate
+brew install macpkgmap
 ```
