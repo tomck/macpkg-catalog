@@ -44,3 +44,30 @@ def test_python_version_family_matches_different_manager_naming():
     assert len(relations)==1
     assert relations[0]["matching_method"] == "version-family"
     assert relations[0]["review_status"] == "needs-review"
+    assert relations[0]["confidence"] == 0.94
+    assert {e["kind"] for e in relations[0]["evidence"]} == {"version-family", "version-semantic"}
+
+def test_python_version_family_does_not_cross_versions_or_legacy_fink():
+    packages=[
+        {"manager":"homebrew","package_type":"formula","native_name":"python@3.14"},
+        {"manager":"homebrew","package_type":"formula","native_name":"python@3.13"},
+        {"manager":"macports","package_type":"port","native_name":"python314"},
+        {"manager":"macports","package_type":"port","native_name":"python313"},
+        {"manager":"fink","package_type":"package","native_name":"python24"},
+    ]
+    relations=match(packages,{"fixture":"1"})
+    pairs={(r["source"]["native_name"],r["target"]["native_name"]) for r in relations}
+    assert ("python@3.14","python314") in pairs
+    assert ("python@3.13","python313") in pairs
+    assert not any("python24" in pair for pair in pairs)
+    assert ("python@3.14","python313") not in pairs
+
+def test_python_matching_uses_matching_description_version_as_extra_evidence():
+    packages=[
+        {"manager":"homebrew","package_type":"formula","native_name":"python@3.14","description":"Python 3.14 runtime"},
+        {"manager":"macports","package_type":"port","native_name":"python314","description":"Python 3.14 interpreter"},
+    ]
+    relation=[r for r in match(packages,{"fixture":"1"}) if r["source"]["manager"]=="homebrew"][0]
+    assert relation["confidence"] == 0.97
+    assert {e["kind"] for e in relation["evidence"]} == {"version-family", "version-semantic", "description-version"}
+    assert relation["review_status"] == "needs-review"

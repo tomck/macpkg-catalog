@@ -28,11 +28,36 @@ def version_family(name):
         return family or None
     return None
 
+def version_signature(name):
+    """Return a version tuple where the manager naming is unambiguous."""
+    value=normalize_name(name)
+    match=re.fullmatch(r"python-(\d+)(?:-(\d+))?",value)
+    if match:
+        return (int(match.group(1)),int(match.group(2) or 0))
+    match=re.fullmatch(r"python(\d{2,3})",value)
+    if match:
+        digits=match.group(1)
+        return (int(digits[0]),int(digits[1:]))
+    return None
+
+def description_mentions_version(package, signature):
+    if not signature:
+        return False
+    major,minor=signature
+    description=(package.get("description") or "").lower()
+    return (f"{major}.{minor}" in description or
+            re.search(r"\b%d\s*%02d\b" % (major,minor), description) is not None)
+
 def near_hit(source, target, evidence, source_version="", target_version=""):
     """Return a review-only version-family relationship, or None."""
     if not version_family(source["native_name"]) or version_family(source["native_name"]) != version_family(target["native_name"]):
         return None
-    return {"source":identity(source),"target":identity(target),"type":"equivalent","confidence":0.78,
+    confidence=0.78
+    source_version_signature=version_signature(source["native_name"])
+    target_version_signature=version_signature(target["native_name"])
+    if source_version_signature and source_version_signature == target_version_signature:
+        confidence=0.94
+    return {"source":identity(source),"target":identity(target),"type":"equivalent","confidence":confidence,
             "matching_method":"version-family","evidence":evidence,"review_status":"needs-review",
             "version_relation":"nearest-compatible-version","source_version":source_version,
             "target_version":target_version,"source_catalog_versions":{}}
@@ -97,7 +122,19 @@ def match(packages, versions, curated=()):
         for manager in ("homebrew", "macports", "fink"):
             if manager == package["manager"]: continue
             for target in families.get((manager, family), []):
-                relation=near_hit(identity(package),identity(target),[{"kind":"version-family","value":family}],package.get("version",""),target.get("version",""))
+                source_signature=version_signature(package["native_name"])
+                target_signature=version_signature(target["native_name"])
+                if family == "python" and source_signature != target_signature:
+                    continue
+                evidence=[{"kind":"version-family","value":family}]
+                if source_signature and source_signature == target_signature:
+                    evidence.append({"kind":"version-semantic","value":"%d.%d" % source_signature})
+                relation=near_hit(identity(package),identity(target),evidence,package.get("version",""),target.get("version",""))
+                if (relation and source_signature and
+                    description_mentions_version(package,source_signature) and
+                    description_mentions_version(target,target_signature)):
+                    relation["confidence"]=0.97
+                    relation["evidence"].append({"kind":"description-version","value":"%d.%d" % source_signature})
                 pair=(key(relation["source"]),key(relation["target"])) if relation else None
                 if relation and pair not in seen:
                     relation["source_catalog_versions"]=versions
