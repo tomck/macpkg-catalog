@@ -1,4 +1,9 @@
-from macpkg_catalog.sources import normalize_homebrew, normalize_macports, parse_fink_index
+from macpkg_catalog.sources import normalize_homebrew, normalize_macports, parse_fink_index, parse_portindex
+
+def test_parse_local_portindex():
+    rows=parse_portindex("wget 42 description {Internet file retriever} homepage https://example.test version 1.2 revision 0 portdir net/wget", "PortIndex", "r1", "now")
+    assert rows[0]["native_name"] == "wget"
+    assert rows[0]["description"] == "Internet file retriever"
 
 def test_cask_identity_and_version():
     p=normalize_homebrew([{"token":"docker-desktop","name":["Docker Desktop"],"version":"4.0","old_tokens":["docker"]}],"cask","sha","date")[0]
