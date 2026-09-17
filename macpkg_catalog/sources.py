@@ -12,7 +12,7 @@ FINK_SNAPSHOT='https://github.com/fink/fink-distributions/archive/refs/heads/mas
 MACPORTS_PORTINDEX='https://ftp.fau.de/macports/release/tarballs/PortIndex_darwin_25_i386/PortIndex'
 
 def _get(url):
-    request=urllib.request.Request(url,headers={"User-Agent":"macpkgmap/0.1"})
+    request=urllib.request.Request(url,headers={"User-Agent":"macpkgmap/0.4"})
     with urllib.request.urlopen(request,timeout=60) as r: return json.load(r)
 
 def fetch_analytics(category, period="365d", package_type="formula"):
@@ -93,7 +93,7 @@ def fetch_macports_local():
     return None
 
 def fetch_macports_portindex():
-    request=urllib.request.Request(MACPORTS_PORTINDEX,headers={"User-Agent":"macpkgmap/0.1"})
+    request=urllib.request.Request(MACPORTS_PORTINDEX,headers={"User-Agent":"macpkgmap/0.4"})
     with urllib.request.urlopen(request,timeout=180) as response: payload=response.read()
     return parse_portindex(payload.decode("utf-8","replace"),MACPORTS_PORTINDEX,hashlib.sha256(payload).hexdigest(),datetime.now(timezone.utc).isoformat())
 
@@ -215,7 +215,7 @@ def fetch_fink_local():
 def fetch_fink_snapshot():
     local=fetch_fink_local()
     if local is not None: return local
-    request=urllib.request.Request(FINK_SNAPSHOT,headers={"User-Agent":"macpkgmap/0.1"})
+    request=urllib.request.Request(FINK_SNAPSHOT,headers={"User-Agent":"macpkgmap/0.4"})
     with urllib.request.urlopen(request,timeout=180) as response: payload=response.read()
     revision=hashlib.sha256(payload).hexdigest(); records=[]; seen=datetime.now(timezone.utc).isoformat()
     with tarfile.open(fileobj=io.BytesIO(payload),mode="r:gz") as archive:

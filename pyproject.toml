@@ -3,7 +3,7 @@ requires = ["setuptools>=61"]
 build-backend = "setuptools.build_meta"
 [project]
 name = "macpkgmap"
-version = "0.1.0"
+version = "0.4.0"
 requires-python = ">=3.9"
 dependencies = ["PyYAML>=6"]
 [project.scripts]
