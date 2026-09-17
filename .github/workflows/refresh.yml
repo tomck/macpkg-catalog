@@ -1,6 +1,12 @@
 name: refresh-catalog
 on:
   workflow_dispatch:
+    inputs:
+      seed-archives:
+        description: 'Probe every MacPorts archive page (one-time seed; hours)'
+        required: false
+        default: false
+        type: boolean
   schedule: [{cron: '17 4 * * 1'}]
 permissions: {contents: write, pages: write, id-token: write}
 jobs:
@@ -12,8 +18,10 @@ jobs:
         with: {python-version: '3.x'}
       - name: Install catalog and test runner
         run: python -m pip install --disable-pip-version-check -e . pytest
+      - name: Refresh binary-availability state
+        run: PYTHONPATH=. python -m macpkg_catalog.archive_refresh --previous-catalog https://tomck.github.io/macpkg-catalog/catalog.json --output snapshots/archive-state.json ${{ inputs.seed-archives && '--seed' || '' }}
       - name: Fetch source snapshots
-        run: PYTHONPATH=. python -m macpkg_catalog fetch-live --output snapshots/catalog.json
+        run: PYTHONPATH=. python -m macpkg_catalog fetch-live --output snapshots/catalog.json --archive-state snapshots/archive-state.json
       - name: Build catalog
         run: PYTHONPATH=. python -m macpkg_catalog generate --input snapshots/catalog.json --output build/catalog
       - name: Validate tests

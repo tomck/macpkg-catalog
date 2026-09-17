@@ -4,7 +4,7 @@ from typing import Optional
 MANAGERS={"homebrew","macports","fink"}; NAME=re.compile(r"^[A-Za-z0-9][A-Za-z0-9+@._-]*$")
 @dataclass
 class Package:
-    manager:str; package_type:str; native_name:str; aliases:list=field(default_factory=list); historical_names:list=field(default_factory=list); description:str=""; homepage:str=""; upstream:str=""; version:str=""; revision:str=""; provides:list=field(default_factory=list); conflicts:list=field(default_factory=list); replaces:list=field(default_factory=list); renamed_by:list=field(default_factory=list); source_url:str=""; source_revision:str=""; last_seen:str=""
+    manager:str; package_type:str; native_name:str; aliases:list=field(default_factory=list); historical_names:list=field(default_factory=list); description:str=""; homepage:str=""; upstream:str=""; version:str=""; revision:str=""; provides:list=field(default_factory=list); conflicts:list=field(default_factory=list); replaces:list=field(default_factory=list); renamed_by:list=field(default_factory=list); source_url:str=""; source_revision:str=""; last_seen:str=""; binaries:list=field(default_factory=list)
     @property
     def identity(self): return {"manager":self.manager,"package_type":self.package_type,"native_name":self.native_name}
 

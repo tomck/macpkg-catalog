@@ -11,11 +11,15 @@ def main():
     x=s.add_parser("popularity"); x.add_argument("manager"); x.add_argument("type"); x.add_argument("name"); x.add_argument("--snapshot",default="dist/catalog.json")
     x=s.add_parser("export"); x.add_argument("--output",required=True); x.add_argument("--format",choices=["sqlite"],required=True); x.add_argument("--snapshot",default="dist/catalog.json")
     x=s.add_parser("generate"); x.add_argument("--output",default="dist"); x.add_argument("--refresh",action="store_true"); x.add_argument("--input")
-    x=s.add_parser("fetch-live"); x.add_argument("--output",default="snapshots/catalog.json")
+    x=s.add_parser("fetch-live"); x.add_argument("--output",default="snapshots/catalog.json"); x.add_argument("--archive-state")
     a=p.parse_args()
     if a.cmd=="fetch-live":
         output=Path(a.output); output.parent.mkdir(parents=True,exist_ok=True)
-        output.write_text(json.dumps(fetch_live_snapshot(),indent=2)+"\n")
+        archive_state=None
+        if a.archive_state:
+            from .archive_refresh import load_state_file
+            archive_state,_=load_state_file(a.archive_state)
+        output.write_text(json.dumps(fetch_live_snapshot(archive_state=archive_state),indent=2)+"\n")
         print(f"Wrote {output}"); return
     if a.cmd=="generate":
         if a.refresh: p.error("Full-source refresh is not implemented yet; use --input")

@@ -5,7 +5,10 @@ from urllib.parse import urlsplit
 from .core import key, normalize_name
 
 def identity(package):
-    return dict(zip(("manager","package_type","native_name"),key(package)))
+    result = dict(zip(("manager","package_type","native_name"),key(package)))
+    if package.get("binaries"):
+        result["binaries"] = list(package["binaries"])
+    return result
 
 def upstream_identity(url):
     parsed=urlsplit(url)

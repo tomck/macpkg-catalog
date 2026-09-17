@@ -97,8 +97,13 @@ def fetch_macports_portindex():
     with urllib.request.urlopen(request,timeout=180) as response: payload=response.read()
     return parse_portindex(payload.decode("utf-8","replace"),MACPORTS_PORTINDEX,hashlib.sha256(payload).hexdigest(),datetime.now(timezone.utc).isoformat())
 
-def fetch_live_snapshot():
-    """Build a normalized Homebrew + MacPorts snapshot and analytics records."""
+def fetch_live_snapshot(archive_state=None):
+    """Build a normalized Homebrew + MacPorts snapshot and analytics records.
+
+    archive_state maps (manager, package_type, native_name) to binary
+    platform tokens (see archives.py); the weekly refresh job supplies it
+    from the previous seed/probe. Homebrew bottle tags attach always.
+    """
     seen=datetime.now(timezone.utc).isoformat()
     packages=[]
     for kind in ("formula","cask"):
@@ -119,6 +124,9 @@ def fetch_live_snapshot():
             continue
         unique[(package["manager"],package["package_type"],name)]=package
     packages=list(unique.values())
+    if archive_state:
+        from .archives import attach_archive_state
+        attach_archive_state(packages, archive_state)
     popularity=[]
     for kind in ("formula","cask"):
         for period in ("30d","90d","365d"):
@@ -134,6 +142,11 @@ def fetch(kind):
         out.append({'manager':'homebrew','package_type':kind,'native_name':x.get('name',''),'aliases':x.get('aliases',[]),'description':x.get('desc',''),'homepage':x.get('homepage',''),'upstream':x.get('head',{}).get('url','') if isinstance(x.get('head'),dict) else '','version':(x.get('versions') or {}).get('stable',''),'revision':'','provides':[],'conflicts':[],'replaces':[],'renamed_by':[],'source_url':SOURCES[kind],'source_revision':'','last_seen':''})
     return out
 
+def bottle_platforms(row):
+    """Raw Homebrew bottle tags (e.g. sonoma, arm64_sonoma): binary evidence, free with the fetch."""
+    files=((row.get("bottle") or {}).get("stable") or {}).get("files") or {}
+    return sorted(files)
+
 def normalize_homebrew(rows, kind, revision, seen):
     """Cask token is the native identity; display names are not aliases."""
     records=[]
@@ -141,13 +154,14 @@ def normalize_homebrew(rows, kind, revision, seen):
         name=row["token"] if kind=="cask" else row["name"]
         urls=row.get("urls") or {}
         upstream=(urls.get("head") or urls.get("stable") or {}).get("url","") if kind=="formula" else row.get("url","")
+        binaries=["any"] if kind=="cask" else bottle_platforms(row)
         package=Package("homebrew",kind,name,
             aliases=row.get("aliases",[]),
             historical_names=row.get("old_tokens",[]) if kind=="cask" else row.get("oldnames",[]),
             description=row.get("desc") or "",homepage=row.get("homepage") or "",
             upstream=upstream,version=str(row.get("version","")) if kind=="cask" else str((row.get("versions") or {}).get("stable") or ""),
             revision=str(row.get("revision",0)),source_url=SOURCES[kind],
-            source_revision=revision,last_seen=seen)
+            source_revision=revision,last_seen=seen,binaries=binaries)
         records.append(asdict(package))
     return records
 
