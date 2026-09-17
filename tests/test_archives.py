@@ -62,6 +62,23 @@ def test_parse_bindist_packages_maps_names_to_tree_token():
     }
 
 
+def test_fetch_bindist_packages_decompresses_packages_gz():
+    import gzip
+
+    import macpkg_catalog.archives as archives_module
+
+    payload = gzip.compress(BINDIST_TEXT.encode("utf-8"))
+    seen = []
+    real_get_bytes = archives_module._get_bytes
+    archives_module._get_bytes = lambda url: seen.append(url) or payload
+    try:
+        text = archives_module.fetch_bindist_packages("10.14", "x86_64")
+    finally:
+        archives_module._get_bytes = real_get_bytes
+    assert seen[0].endswith("/10.14/dists/stable/main/binary-darwin-x86_64/Packages.gz")
+    assert "Package: wget" in text
+
+
 def test_merge_archive_state_probed_wins():
     previous = {("macports", "port", "wget"): ["darwin_19.x86_64"]}
     probed = {("macports", "port", "wget"): ["darwin_23.x86_64"]}

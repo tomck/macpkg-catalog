@@ -5,13 +5,20 @@ from macpkg_catalog.archive_refresh import (
     backstop_ports,
     build_state,
     changed_ports,
+    fetch_bindist_state,
     load_state_file,
     parse_state_key,
     previous_from_catalog,
+    probe_ports,
     save_state_file,
     select_probe_set,
     state_key,
+    valid_names,
 )
+
+
+def portindex_entry(name, body):
+    return "%s %d\n%s\n" % (name, len(body) + 1, body)
 
 CATALOG = {
     "generated_at": "2026-09-10T04:17:00+00:00",
@@ -86,10 +93,8 @@ def test_state_file_round_trip(tmp_path):
 
 
 def test_build_state_probes_only_the_union_and_merges(tmp_path):
-    portindex = (
-        "wget 100 description {old} version 1.25 revision 0\n"
-        "node 200 description {js} version 24.0 revision 0\n"
-    )
+    portindex = portindex_entry("wget", "description {old} version 1.25 revision 0") + portindex_entry(
+        "node", "description {js} version 24.0 revision 0")
     listing = "ignored"
     calls = []
 
@@ -119,7 +124,7 @@ def test_build_state_probes_only_the_union_and_merges(tmp_path):
 
 
 def test_build_state_tripwire_probes_everything(tmp_path):
-    portindex = "wget 100 description {old} version 1.24 revision 0\n"
+    portindex = portindex_entry("wget", "description {old} version 1.24 revision 0")
     calls = []
 
     def fetch(name):
@@ -140,5 +145,51 @@ def test_build_state_tripwire_probes_everything(tmp_path):
         )
     finally:
         archives_module.parse_directory_listing = real_listing
+    assert calls == ["wget"]
+    assert state[("macports", "port", "wget")] == []
+
+
+def test_changed_ports_and_probe_drop_implausible_names():
+    # Valid-shaped words ("Also") are stopped by PortIndex framing (see
+    # test_sources); this filter catches the punctuation-shaped fallout.
+    records = RECORDS + [
+        {"native_name": "DANGER:", "version": "1.0", "revision": "0"},
+        {"native_name": "1.}", "version": "1.0", "revision": "0"},
+        {"native_name": "*}", "version": "1.0", "revision": "0"},
+    ]
+    assert changed_ports(records, {}) == {"wget", "node"}
+    assert valid_names({"wget", "DANGER:", "1.}", ""}) == {"wget"}
+    calls = []
+    probe_ports(["wget", "DANGER:", "1.}"], fetch=lambda name: calls.append(name) or "empty", delay=0)
+    assert calls == ["wget"]
+
+
+def test_fetch_bindist_state_skips_dead_tree_with_warning():
+    warnings = []
+
+    def fetch(os_tree, arch):
+        if os_tree == "10.15":
+            raise RuntimeError("HTTP Error 404: Not Found")
+        return "Package: wget\nFilename: stable/main/binary-darwin-x86_64/wget.deb\n\n"
+
+    state = fetch_bindist_state(
+        targets=(("10.14", "x86_64"), ("10.15", "x86_64")),
+        fetch=fetch,
+        progress=warnings.append,
+    )
+    assert state == {("fink", "package", "wget"): ["10.14/binary-darwin-x86_64"]}
+    assert len(warnings) == 1 and "10.15" in warnings[0]
+
+
+def test_build_state_seed_uses_native_name():
+    portindex = portindex_entry("wget", "description {old} version 1.25 revision 0")
+    calls = []
+    state = build_state(
+        portindex_text=portindex,
+        seed=True,
+        fetch=lambda name: calls.append(name) or "empty",
+        bindist=False,
+        delay=0,
+    )
     assert calls == ["wget"]
     assert state[("macports", "port", "wget")] == []

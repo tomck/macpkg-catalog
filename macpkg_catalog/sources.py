@@ -1,5 +1,6 @@
 import json, urllib.request
 import hashlib
+import re
 import time
 import os
 import gzip, io, tarfile
@@ -45,14 +46,40 @@ def fetch_macports(page_size=50, progress=None):
 def parse_portindex(text, source_url, revision, seen):
     """Parse MacPorts' local pre-generated PortIndex without contacting its API."""
     records=[]
-    lines=text.splitlines(); index=0
+    # Work on raw bytes: some bodies contain non-UTF8 bytes, and decoding
+    # with replacement first would inflate them and break count verification.
+    raw=text.encode("utf-8") if isinstance(text,str) else bytes(text)
+    header=re.compile(r"^(\S+) (\d+)$")
+    lines=raw.split(b"\n"); index=0
     while index < len(lines):
-        line=lines[index]; index+=1
-        line=line.strip()
+        try: line=lines[index].decode("ascii").strip()
+        except UnicodeDecodeError: line=""
+        index+=1
         if not line or line.startswith("#"): continue
-        parts=line.split(None,2)
-        if len(parts)==2 and index < len(lines):
-            line += " " + lines[index].strip(); index+=1
+        match=header.match(line)
+        # PortIndex entries are "name bytecount" followed by body lines whose
+        # lengths (plus newlines) add up to the count exactly. Accumulate
+        # wrapped description lines; a header whose count never verifies is a
+        # fragment, not an entry: skip it without consuming anything, or one
+        # wrapped entry desyncs every entry after it into garbage names
+        # (weekly run 35284729163 probed words like "Also" as ports).
+        if match is None: continue
+        count=int(match.group(2)); total=0; chunks=[]; end=index
+        while end < len(lines) and total < count and len(chunks) < 50:
+            chunks.append(lines[end].decode("utf-8","replace")); total+=len(chunks[-1])+1; end+=1
+        if total == count or total+1 == count:
+            index=end
+        else:
+            # The shipped file occasionally carries a stale byte count. The
+            # header name is still trustworthy, so take the next line as the
+            # body unless it is itself a header; either way framing resyncs
+            # on the following line instead of cascading.
+            following=lines[index].decode("utf-8","replace").strip() if index < len(lines) else ""
+            if not following or header.match(following):
+                continue
+            chunks=[following]; index+=1
+        body="\n".join(chunks)
+        line=line+" "+body.strip()
         fields={}; pos=0; parts=line.split(None,2)
         if len(parts)<3: continue
         fields["name"]=parts[0]
@@ -88,14 +115,14 @@ def fetch_macports_local():
     for filename in candidates:
         if os.path.isfile(filename):
             stat=os.stat(filename)
-            with open(filename,encoding="utf-8",errors="replace") as stream: text=stream.read()
+            with open(filename,"rb") as stream: text=stream.read()
             return parse_portindex(text,filename,str(stat.st_mtime_ns),datetime.now(timezone.utc).isoformat())
     return None
 
 def fetch_macports_portindex():
     request=urllib.request.Request(MACPORTS_PORTINDEX,headers={"User-Agent":"macpkgmap/0.5"})
     with urllib.request.urlopen(request,timeout=180) as response: payload=response.read()
-    return parse_portindex(payload.decode("utf-8","replace"),MACPORTS_PORTINDEX,hashlib.sha256(payload).hexdigest(),datetime.now(timezone.utc).isoformat())
+    return parse_portindex(payload,MACPORTS_PORTINDEX,hashlib.sha256(payload).hexdigest(),datetime.now(timezone.utc).isoformat())
 
 def fetch_live_snapshot(archive_state=None):
     """Build a normalized Homebrew + MacPorts snapshot and analytics records.

@@ -18,6 +18,7 @@ import time
 from pathlib import Path
 
 from . import archives
+from .core import NAME
 from .sources import fetch_macports_portindex, parse_portindex
 
 PREVIOUS_CATALOG_URL = "https://tomck.github.io/macpkg-catalog/catalog.json"
@@ -45,11 +46,19 @@ def previous_from_catalog(catalog):
     return versions, binaries, catalog.get("generated_at")
 
 
+def valid_names(names):
+    """Keep only plausible package names, so a parser desync can never turn
+    description words into thousands of doomed archive probes."""
+    return {name for name in names if name and NAME.match(name)}
+
+
 def changed_ports(records, previous_versions):
     """Ports added or version/revision-changed since previous versions."""
     changed = set()
     for record in records:
         name = record.get("native_name", record.get("name"))
+        if not name or not NAME.match(name):
+            continue
         if previous_versions.get(name) != (record.get("version", ""), record.get("revision", "")):
             changed.add(name)
     return changed
@@ -98,7 +107,7 @@ def probe_ports(names, fetch=archives.fetch_archive_page, previous=None, progres
     restarting.
     """
     state = dict(previous or {})
-    for count, name in enumerate(sorted(names), 1):
+    for count, name in enumerate(sorted(valid_names(names)), 1):
         if name in state:
             continue
         try:
@@ -113,11 +122,22 @@ def probe_ports(names, fetch=archives.fetch_archive_page, previous=None, progres
     return state
 
 
-def fetch_bindist_state(targets=archives.FINK_BINDIST_TARGETS, fetch=archives.fetch_bindist_packages):
-    """{(fink, package, name): [tree/arch token]} across bindist targets."""
+def fetch_bindist_state(targets=archives.FINK_BINDIST_TARGETS, fetch=archives.fetch_bindist_packages,
+                        progress=None):
+    """{(fink, package, name): [tree/arch token]} across bindist targets.
+
+    One dead tree (a 404ing Packages index, as 10.15 was) warns and skips
+    instead of killing the whole weekly refresh.
+    """
     state = {}
     for os_tree, arch in targets:
-        for name, token in archives.parse_bindist_packages(fetch(os_tree, arch), os_tree, arch).items():
+        try:
+            packages = fetch(os_tree, arch)
+        except Exception as exc:  # noqa: BLE001 - one dead tree skips, the refresh continues
+            if progress:
+                progress(f"Warning: fink bindist {os_tree}/{arch} unavailable ({exc}); skipped.")
+            continue
+        for name, token in archives.parse_bindist_packages(packages, os_tree, arch).items():
             state.setdefault(("fink", "package", name), []).append(token)
     return {key: sorted(tokens) for key, tokens in state.items()}
 
@@ -161,7 +181,7 @@ def build_state(portindex_text=None, previous_catalog=None, seed=False, fetch=ar
         previous_binaries = dict(previous_state)
     macports_previous = {name: tokens for (manager, _, name), tokens in previous_binaries.items() if manager == "macports"}
     if seed:
-        probe = {record["name"] for record in records}
+        probe = valid_names({record.get("native_name", record.get("name")) for record in records})
         tripped = False
     else:
         changed = changed_ports(records, previous_versions)
@@ -170,7 +190,7 @@ def build_state(portindex_text=None, previous_catalog=None, seed=False, fetch=ar
         if tripped:
             if progress:
                 progress("Warning: empty probe set against nonempty history; probing everything (possible listing-format rot).")
-            probe = {record.get("native_name", record.get("name")) for record in records}
+            probe = valid_names({record.get("native_name", record.get("name")) for record in records})
     # Refresh mode re-probes the whole (already minimal) union; seed mode
     # skips checkpointed names so an interrupted seed resumes.
     probed = probe_ports(probe, fetch=fetch,
@@ -180,7 +200,7 @@ def build_state(portindex_text=None, previous_catalog=None, seed=False, fetch=ar
     for name, tokens in probed.items():
         state[("macports", "port", name)] = tokens
     if bindist:
-        state.update(fetch_bindist_state())
+        state.update(fetch_bindist_state(progress=progress))
     return state
 
 
@@ -201,7 +221,7 @@ def main(argv=None):
     if args.previous_state and Path(args.previous_state).is_file():
         # Resume/merge: the output file doubles as the checkpoint.
         previous_state, _ = load_state_file(args.previous_state)
-    portindex_text = Path(args.portindex_file).read_text() if args.portindex_file else None
+    portindex_text = Path(args.portindex_file).read_bytes() if args.portindex_file else None
     output = Path(args.output)
     resumed, _ = load_state_file(output) if output.is_file() else (None, None)
     if resumed:

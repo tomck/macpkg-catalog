@@ -14,14 +14,17 @@ PortIndex version diff and the DirectoryIndex mtime diff and probe only
 those pages. A suspiciously small union means listing-format rot: warn
 and re-probe fully that week.
 """
+import gzip
 import re
 import urllib.request
 
 USER_AGENT = "macpkgmap/0.5"
 PACKAGES_BASE = "https://packages.macports.org"
 BINDIST_BASE = "http://bindist.finkmirrors.net"
-# OS trees x architectures probed for Fink binaries.
-FINK_BINDIST_TARGETS = (("10.14", "x86_64"), ("10.15", "x86_64"))
+# OS trees x architectures probed for Fink binaries. Trees publish only a
+# gzipped Packages index; 10.15 currently has a Release but no Packages file,
+# so it stays out until its bindist appears.
+FINK_BINDIST_TARGETS = (("10.13", "x86_64"), ("10.14", "x86_64"))
 
 ARCHIVE_FILENAME = re.compile(r"\.((darwin_\d+)\.(arm64|x86_64|ppc|i386))\.tbz2(?=[\"'<\s])")
 LISTING_ROW = re.compile(r'<a href="([^"?]+)">[^<]*</a></td><td align="right">([^<]+)</td>')
@@ -93,5 +96,15 @@ def fetch_directory_listing():
     return _get(PACKAGES_BASE + "/")
 
 
+def _get_bytes(url, timeout=60):
+    request = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
+    with urllib.request.urlopen(request, timeout=timeout) as response:
+        return response.read()
+
+
 def fetch_bindist_packages(os_tree, arch):
-    return _get(f"{BINDIST_BASE}/{os_tree}/dists/stable/main/binary-darwin-{arch}/Packages")
+    """Fetch a bindist Packages.gz index as text (gunzipped when needed)."""
+    payload = _get_bytes(f"{BINDIST_BASE}/{os_tree}/dists/stable/main/binary-darwin-{arch}/Packages.gz")
+    if payload[:2] == b"\x1f\x8b":
+        payload = gzip.decompress(payload)
+    return payload.decode("utf-8", "replace")
