@@ -71,3 +71,41 @@ def test_python_matching_uses_matching_description_version_as_extra_evidence():
     assert relation["confidence"] == 0.97
     assert {e["kind"] for e in relation["evidence"]} == {"version-family", "version-semantic", "description-version"}
     assert relation["review_status"] == "needs-review"
+
+def test_version_anchored_node_tracks_current_major():
+    packages=[
+        {"manager":"homebrew","package_type":"formula","native_name":"node","version":"26.10.0"},
+        {"manager":"macports","package_type":"port","native_name":"nodejs24","version":"24.19.0"},
+        {"manager":"macports","package_type":"port","native_name":"nodejs26","version":"26.8.1"},
+    ]
+    relations=[r for r in match(packages,{"fixture":"1"}) if r["source"]["manager"]=="homebrew"]
+    pairs={(r["target"]["native_name"],r["confidence"],r["review_status"]) for r in relations}
+    assert ("nodejs26",0.78,"needs-review") in pairs
+    assert not any(name=="nodejs24" for name,_,_ in pairs)
+    anchored=[r for r in relations if r["target"]["native_name"]=="nodejs26"]
+    assert anchored[0]["matching_method"] == "version-family"
+    assert {e["kind"] for e in anchored[0]["evidence"]} == {"version-anchored"}
+
+def test_version_anchored_reverse_direction():
+    packages=[
+        {"manager":"homebrew","package_type":"formula","native_name":"node","version":"24.19.0"},
+        {"manager":"macports","package_type":"port","native_name":"nodejs24","version":"24.19.0"},
+    ]
+    relations=[r for r in match(packages,{"fixture":"1"}) if r["source"]["manager"]=="macports"]
+    assert len(relations)==1
+    assert relations[0]["target"]["native_name"]=="node"
+    assert relations[0]["review_status"]=="needs-review"
+
+def test_version_anchored_needs_versions_and_stays_single():
+    packages=[
+        {"manager":"homebrew","package_type":"formula","native_name":"wget","version":"1.25"},
+        {"manager":"macports","package_type":"port","native_name":"wget","version":"1.25"},
+    ]
+    relations=match(packages,{"fixture":"1"})
+    assert len(relations)==2  # exact-name both directions, nothing anchored
+    assert all(r["matching_method"]=="exact-name" for r in relations)
+    packages=[
+        {"manager":"homebrew","package_type":"formula","native_name":"node"},
+        {"manager":"macports","package_type":"port","native_name":"nodejs26"},
+    ]
+    assert match(packages,{"fixture":"1"})==[]

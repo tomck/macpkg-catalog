@@ -51,6 +51,30 @@ def description_mentions_version(package, signature):
     return (f"{major}.{minor}" in description or
             re.search(r"\b%d\s*%02d\b" % (major,minor), description) is not None)
 
+def version_stem(name):
+    """Stem for version-anchored matching: normalized name minus one trailing
+    version run (optional separator, short alpha infix, digits).
+
+    nodejs24 -> node, node-24 -> node, python314 -> python. Bare names keep
+    their full form. Independent of version_family: that gate stays untouched.
+    """
+    value = normalize_name(name)
+    stem = re.sub(r"[^a-z0-9]?[a-z]{0,2}\d+$", "", value).strip("-")
+    return stem or value
+
+
+def name_trailing_version(name):
+    """Trailing version digits of a name, e.g. nodejs24 -> 24, else None."""
+    match = re.search(r"(\d+)$", normalize_name(name))
+    return int(match.group(1)) if match else None
+
+
+def package_major(package):
+    """Leading major of the package version field, e.g. 24.19.0 -> 24."""
+    match = re.match(r"(\d+)", str(package.get("version") or ""))
+    return int(match.group(1)) if match else None
+
+
 def near_hit(source, target, evidence, source_version="", target_version=""):
     """Return a review-only version-family relationship, or None."""
     if not version_family(source["native_name"]) or version_family(source["native_name"]) != version_family(target["native_name"]):
@@ -142,4 +166,44 @@ def match(packages, versions, curated=()):
                 if relation and pair not in seen:
                     relation["source_catalog_versions"]=versions
                     result.append(relation); seen.add(pair)
+    # Version-anchored stem matches: a package at major M correlates to a
+    # same-stem name carrying M (homebrew node v24 -> macports nodejs24).
+    # Self-maintaining across majors, unlike pinned curation. Review-only and
+    # capped like all version-family output; the major-equality gate keeps it
+    # conservative. Built as its own block: version_family/near_hit stay
+    # untouched, and the seen/blocked sets dedup against every other tier.
+    stems=defaultdict(list)
+    for package in packages:
+        stems[(package["manager"],version_stem(package["native_name"]))].append(package)
+    for package in packages:
+        major=package_major(package)
+        trailing=name_trailing_version(package["native_name"])
+        if major is None and trailing is None:
+            continue
+        for manager in ("homebrew","macports","fink"):
+            if manager==package["manager"]:
+                continue
+            for target in stems.get((manager,version_stem(package["native_name"])),[]):
+                target_trailing=name_trailing_version(target["native_name"])
+                target_major=package_major(target)
+                forward=(major is not None and target_trailing is not None
+                         and target_trailing==major
+                         and (target_major is None or target_major==major))
+                reverse=(trailing is not None and target_trailing is None
+                         and target_major==trailing)
+                if not (forward or reverse):
+                    continue
+                pair=(key(package),key(target))
+                if pair in seen or pair in blocked:
+                    continue
+                anchor=major if forward else trailing
+                result.append({"source":identity(package),"target":identity(target),
+                    "type":"equivalent","confidence":0.78,"matching_method":"version-family",
+                    "evidence":[{"kind":"version-anchored",
+                                 "value":"%s:%s" % (version_stem(package["native_name"]),anchor)}],
+                    "review_status":"needs-review","version_relation":"version-anchored-major",
+                    "source_version":package.get("version",""),
+                    "target_version":target.get("version",""),
+                    "source_catalog_versions":versions})
+                seen.add(pair)
     return sorted(result,key=lambda r:(key(r["source"]),key(r["target"])))

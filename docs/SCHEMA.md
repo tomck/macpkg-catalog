@@ -11,3 +11,7 @@ remain `unknown` unless the source explicitly provides package-level data.
 
 Near-hit relationships use `matching_method: version-family`, a confidence
 cap below the automatic threshold, and `review_status: needs-review`.
+Version-anchored relations (`evidence.kind: version-anchored`,
+`version_relation: version-anchored-major`) correlate a bare name at package
+major M to a same-stem name carrying M (homebrew `node` v26 to macports
+`nodejs26`); they track the current major without pinned curation.
