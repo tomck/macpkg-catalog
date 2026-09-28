@@ -18,7 +18,7 @@ import gzip
 import re
 import urllib.request
 
-USER_AGENT = "macpkgmap/0.6"
+USER_AGENT = "macpkgmap/0.7"
 PACKAGES_BASE = "https://packages.macports.org"
 BINDIST_BASE = "http://bindist.finkmirrors.net"
 # OS trees x architectures probed for Fink binaries. Trees publish only a
